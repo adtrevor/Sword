@@ -10,6 +10,7 @@ import Foundation
 import Dispatch
 import AsyncWebSocketClient
 import NIO
+import NIOSSL
 
 protocol Gateway: class {
     var eventLoop: EventLoopGroup { get }
@@ -46,7 +47,7 @@ extension Gateway {
     
     /// Starts the gateway connection
     func start() -> EventLoopFuture<Void> {
-        let websocketClient = WebSocketClient(eventLoopGroupProvider: .shared(self.eventLoop))
+        let websocketClient = WebSocketClient(eventLoopGroupProvider: .shared(self.eventLoop), configuration: WebSocketClient.Configuration(tlsConfiguration: TLSConfiguration.forClient(), maxFrameSize: 1 << 15))
         
         guard let url = URL(string: self.gatewayUrl), let host = url.host else {
             fatalError()
