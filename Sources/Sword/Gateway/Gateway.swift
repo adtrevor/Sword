@@ -54,9 +54,9 @@ extension Gateway {
         }
         
         let promise = self.eventLoop.next().makePromise(of: WebSocketClient.Socket.self)
-        _ = try! websocketClient.connect(host: host, port: 443, uri: url.path) { socket in
+        _ = websocketClient.connect(host: host, port: 443, uri: url.path) { socket in
             promise.succeed(socket)
-        }.wait()
+        }
         
         return promise.futureResult.map { socket in
             self.session = socket
