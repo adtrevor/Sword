@@ -52,8 +52,8 @@ extension Gateway {
             fatalError()
         }
         
-        let promise = try! self.eventLoop.next().makePromise(of: WebSocketClient.Socket.self)
-        _ = websocketClient.connect(host: host, port: 443, uri: url.path) { socket in
+        let promise = self.eventLoop.next().makePromise(of: WebSocketClient.Socket.self)
+        _ = try! websocketClient.connect(host: host, port: 443, uri: url.path) { socket in
             promise.succeed(socket)
         }.wait()
         
