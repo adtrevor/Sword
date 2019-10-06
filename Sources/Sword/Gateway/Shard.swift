@@ -9,9 +9,11 @@
 import Foundation
 import Dispatch
 import AsyncWebSocketClient
+import NIO
 
 /// WS class
 class Shard: Gateway {
+    var eventLoop: EventLoopGroup
     
     // MARK: Properties
     
@@ -69,6 +71,7 @@ class Shard: Gateway {
      - parameter shardCount: Total number of shards bot needs to be connected to
      */
     init(_ sword: Sword, _ id: Int, _ shardCount: Int, _ gatewayUrl: String) {
+        self.eventLoop = sword.eventLoopGroup
         self.sword = sword
         self.id = id
         self.shardCount = shardCount
@@ -242,22 +245,12 @@ class Shard: Gateway {
     #endif
     
     /// Used to reconnect to gateway
-    func reconnect() {
-        #if !os(Linux)
-        if let isOn = self.session?.isConnected, isOn {
-            self.session?.disconnect()
+    func reconnect() -> EventLoopFuture<Void> {
+        if let isClosed = self.session?.isClosed, !isClosed {
+            try! self.session?.close().wait()
         }
-        #else
-        if let isOn = self.session?.state, isOn == .open {
-            try? self.session?.close()
-        }
-        #endif
         
-        self.isConnected = false
-        
-        self.sword.log("Disconnected from gateway... Resuming session")
-        
-        self.start()
+        return self.start()
     }
     
     /// Function to send packet to server to request for offline members for requested guild
@@ -282,11 +275,7 @@ class Shard: Gateway {
      */
     func send(_ text: String, presence: Bool = false) {
         let item = DispatchWorkItem { [unowned self] in
-            #if !os(Linux)
-            self.session?.write(string: text)
-            #else
-            try? self.session?.send(text)
-            #endif
+            self.session?.send(text: text)
         }
         
         presence ? self.presenceBucket.queue(item) : self.globalBucket.queue(item)
@@ -294,16 +283,12 @@ class Shard: Gateway {
     
     /// Used to stop WS connection
     func stop() {
-        #if !os(Linux)
-        self.session?.disconnect()
-        #else
-        try? self.session?.close()
-        #endif
-        
-        self.isConnected = false
-        self.isReconnecting = false
-        
-        self.sword.log("Stopping gateway connection...")
+        self.session?.close().map {
+            self.isConnected = false
+            self.isReconnecting = false
+            
+            self.sword.log("Stopping gateway connection...")
+        }
     }
     
 }

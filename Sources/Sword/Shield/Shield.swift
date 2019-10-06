@@ -5,6 +5,9 @@
 //  Created by Alejandro Alonso
 //  Copyright © 2017 Alejandro Alonso. All rights reserved.
 //
+
+import NIO
+
 /// Shield class that extends Sword
 open class Shield: Sword {
     
@@ -29,13 +32,14 @@ open class Shield: Sword {
      - parameter shieldOptions: ShieldOptions structure to apply to command client
      */
     public init(
+        eventLoopGroup: EventLoopGroup,
         token: String,
         swordOptions: SwordOptions = SwordOptions(),
         shieldOptions: ShieldOptions = ShieldOptions()
     ) {
         self.shieldOptions = shieldOptions
         
-        super.init(token: token, options: swordOptions)
+        super.init(eventLoopGroup: eventLoopGroup, token: token, options: swordOptions)
         
         if self.shieldOptions.willDefaultHelp {
             self.registerHelp()

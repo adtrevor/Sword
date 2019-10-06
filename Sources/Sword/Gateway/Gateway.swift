@@ -12,6 +12,7 @@ import AsyncWebSocketClient
 import NIO
 
 protocol Gateway: class {
+    var eventLoop: EventLoopGroup { get }
     
     var gatewayUrl: String { get set }
     
@@ -21,7 +22,7 @@ protocol Gateway: class {
     
     var isConnected: Bool { get set }
     
-    var session: WebSocketClient? { get set }
+    var session: WebSocketClient.Socket? { get set }
     
     var wasAcked: Bool { get set }
     
@@ -31,11 +32,11 @@ protocol Gateway: class {
     
     func heartbeat(at interval: Int)
     
-    func reconnect()
+    func reconnect() -> EventLoopFuture<Void>
     
     func send(_ text: String, presence: Bool)
     
-    func start()
+    func start() -> EventLoopFuture<Void>
     
     func stop()
     
@@ -44,66 +45,40 @@ protocol Gateway: class {
 extension Gateway {
     
     /// Starts the gateway connection
-    func start() {
-        #if !os(Linux)
-        if self.session == nil {
-            let cl = WebSocketClient(eventLoopGroupProvider: .createNew)
-            cl.connect(host: <#T##String#>, port: <#T##Int#>, uri: <#T##String#>, headers: <#T##HTTPHeaders#>, onUpgrade: <#T##(WebSocketClient.Socket) -> ()#>)
-            
-            
-            self.session = WebSocket(url: URL(string: self.gatewayUrl)!)
-            
-            
-            self.session?.onConnect = { [unowned self] in
-                self.isConnected = true
-            }
-            
-            self.session?.onText = { [unowned self] text in
+    func start() -> EventLoopFuture<Void> {
+        let websocketClient = WebSocketClient(eventLoopGroupProvider: .shared(self.eventLoop))
+        
+        guard let url = URL(string: self.gatewayUrl), let host = url.host else {
+            fatalError()
+        }
+        
+        let promise = self.eventLoop.next().makePromise(of: WebSocketClient.Socket.self)
+        _ = websocketClient.connect(host: host, port: 443, uri: url.path) { socket in
+            promise.succeed(socket)
+        }
+        
+        return promise.futureResult.map { socket in
+            self.session = socket
+            self.isConnected = true
+            socket.onText { [unowned self] _, text in
                 self.handlePayload(Payload(with: text))
             }
             
-            self.session?.onDisconnect = { [unowned self] error in
+            //FIXME: Handle errors like self.handleDisconnect() is expecting
+            /*
+             self.session?.onDisconnect = { [unowned self] error in
+                 self.isConnected = false
+                 
+                 guard let error = error else { return }
+                 
+                 self.handleDisconnect(for: (error as NSError).code)
+             }
+             */
+            
+            socket.onClose.whenComplete { _ in
                 self.isConnected = false
-                
-                guard let error = error else { return }
-                
-                self.handleDisconnect(for: (error as NSError).code)
             }
         }
-        
-        self.session?.connect()
-        #else
-        do {
-            let gatewayUri = try URI(self.gatewayUrl)
-            let tcp = try TCPInternetSocket(
-                scheme: "https",
-                hostname: gatewayUri.hostname,
-                port: gatewayUri.port ?? 443
-            )
-            let stream = try TLS.InternetSocket(tcp, TLS.Context(.client))
-            try WebSocket.connect(to: gatewayUrl, using: stream) {
-                [unowned self] ws in
-                
-                self.session = ws
-                self.isConnected = true
-                
-                ws.onText = { _, text in
-                    self.handlePayload(Payload(with: text))
-                }
-                
-                ws.onClose = { _, code, _, _ in
-                    self.isConnected = false
-                    
-                    guard let code = code else { return }
-                    
-                    self.handleDisconnect(for: Int(code))
-                }
-            }
-        }catch {
-            print("[Sword] \(error.localizedDescription)")
-            self.start()
-        }
-        #endif
     }
     
 }

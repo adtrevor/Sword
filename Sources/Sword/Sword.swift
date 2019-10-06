@@ -8,6 +8,7 @@
 
 import Foundation
 import Dispatch
+import NIO
 
 /// Main Class for Sword
 open class Sword: Eventable {
@@ -76,6 +77,8 @@ open class Sword: Eventable {
     /// The bot token
     let token: String
     
+    let eventLoopGroup: EventLoopGroup
+    
     /// Array of unavailable guilds the bot is currently connected to
     public internal(set) var unavailableGuilds = [Snowflake: UnavailableGuild]()
     
@@ -99,7 +102,8 @@ open class Sword: Eventable {
      - parameter token: The bot token
      - parameter options: Options to give bot (sharding, offline members, etc)
      */
-    public init(token: String, options: SwordOptions = SwordOptions()) {
+    public init(eventLoopGroup: EventLoopGroup, token: String, options: SwordOptions = SwordOptions()) {
+        self.eventLoopGroup = eventLoopGroup
         self.options = options
         self.token = token
     }
